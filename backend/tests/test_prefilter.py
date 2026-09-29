@@ -29,6 +29,17 @@ def test_self_promotion_is_rejected() -> None:
     assert evaluate_message("Я разработчик сайтов, беру новые проекты").passed is False
 
 
+def test_web_studio_broadcast_is_rejected() -> None:
+    result = evaluate_message(
+        "Наша веб-студия разрабатывает сайты и предлагает услуги разработки под ключ"
+    )
+    assert result.passed is False
+    assert (
+        "предлагает услуги" in result.negative_matches
+        or "наша веб-студия" in result.negative_matches
+    )
+
+
 def test_profile_negative_keyword_is_rejected() -> None:
     result = evaluate_message(
         "Нужен подрядчик, чтобы сделать сайт для казино",

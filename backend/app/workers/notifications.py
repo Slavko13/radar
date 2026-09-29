@@ -9,6 +9,8 @@ from app.config import Settings
 from app.database import SessionLocal
 from app.models import AppSettings, Lead, Message, SearchProfile
 from app.notifications.bot import BotApiError, TelegramBotClient
+from app.services.message_quality import message_similarity, normalize_message
+from app.services.prefilter import DEFAULT_SUBJECT_KEYWORDS, evaluate_message
 
 logger = logging.getLogger(__name__)
 NOTIFICATION_RETRY_DELAYS = (5, 30, 120, 300)
@@ -78,6 +80,18 @@ class NotificationWorker:
             lead = (await db.scalars(query)).one_or_none()
             if lead is None:
                 return False
+            suppression_reason = await self._suppression_reason(db, lead, now)
+            if suppression_reason:
+                lead.notified_at = now
+                lead.notification_next_attempt_at = None
+                lead.notification_error = None
+                lead.message.suppression_reason = suppression_reason
+                await db.commit()
+                logger.info(
+                    "lead_notification_suppressed",
+                    extra={"lead_id": lead.id, "reason": suppression_reason},
+                )
+                return True
             lead.notification_attempts += 1
             lead.notification_next_attempt_at = now + timedelta(minutes=5)
             await db.commit()
@@ -98,6 +112,57 @@ class NotificationWorker:
                 await db.commit()
         logger.info("lead_notification_sent", extra={"lead_id": lead_id})
         return True
+
+    async def _suppression_reason(
+        self, db, lead: Lead, now: datetime
+    ) -> str | None:
+        profile = (
+            await db.get(SearchProfile, lead.search_profile_id)
+            if lead.search_profile_id
+            else None
+        )
+        if profile:
+            current_filter = evaluate_message(
+                lead.message.text,
+                include_vacancies=profile.include_vacancies,
+                require_intent=not bool(profile.positive_keywords),
+                minimum_length=1 if profile.positive_keywords else 10,
+                subject_keywords=tuple(profile.positive_keywords) or DEFAULT_SUBJECT_KEYWORDS,
+                negative_keywords=tuple(profile.negative_keywords),
+            )
+            if not current_filter.passed:
+                return "FILTERED_BEFORE_NOTIFICATION"
+
+        normalized = normalize_message(lead.message.text)
+        if len(normalized) < 40:
+            return None
+        sent_messages = (
+            await db.scalars(
+                select(Message)
+                .join(Lead, Lead.message_id == Message.id)
+                .where(
+                    Lead.notified_at.is_not(None),
+                    Message.message_date >= now - timedelta(days=30),
+                )
+                .order_by(Lead.notified_at.desc())
+                .limit(300)
+            )
+        ).all()
+        for sent in sent_messages:
+            sent_normalized = normalize_message(sent.text)
+            length_ratio = min(len(normalized), len(sent_normalized)) / max(
+                len(normalized), len(sent_normalized), 1
+            )
+            if length_ratio < 0.65:
+                continue
+            threshold = (
+                0.84
+                if lead.message.sender_id and sent.sender_id == lead.message.sender_id
+                else 0.93
+            )
+            if message_similarity(lead.message.text, sent.text) >= threshold:
+                return "SIMILAR_NOTIFICATION"
+        return None
 
     async def _record_failure(self, lead_id: int) -> None:
         async with SessionLocal() as db:

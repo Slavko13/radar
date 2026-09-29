@@ -150,7 +150,9 @@ class Source(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    messages: Mapped[list["Message"]] = relationship(back_populates="source")
+    messages: Mapped[list["Message"]] = relationship(
+        back_populates="source", passive_deletes=True
+    )
 
 
 class Message(Base):
@@ -167,6 +169,11 @@ class Message(Base):
     sender_username: Mapped[str | None] = mapped_column(String(255))
     sender_name: Mapped[str | None] = mapped_column(String(255))
     text: Mapped[str] = mapped_column(Text)
+    content_fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+    duplicate_of_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL"), nullable=True
+    )
+    suppression_reason: Mapped[str | None] = mapped_column(String(50))
     message_date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     edit_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     thread_id: Mapped[int | None] = mapped_column(BigInteger)

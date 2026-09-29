@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -237,8 +237,7 @@ async def pause_source(source_id: int, db: DbSession) -> Source:
 
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_source(source_id: int, db: DbSession) -> None:
-    source = await db.get(Source, source_id)
-    if not source:
+    result = await db.execute(delete(Source).where(Source.id == source_id))
+    if not result.rowcount:
         raise HTTPException(404, "Source not found")
-    await db.delete(source)
     await db.commit()

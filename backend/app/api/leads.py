@@ -120,9 +120,24 @@ async def add_feedback(
     lead = await db.get(Lead, lead_id)
     if not lead:
         raise HTTPException(404, "Lead not found")
-    feedback = LeadFeedback(lead_id=lead_id, feedback=payload.feedback)
+    existing = list(
+        (
+            await db.scalars(
+                select(LeadFeedback)
+                .where(LeadFeedback.lead_id == lead_id, LeadFeedback.user_id.is_(None))
+                .order_by(LeadFeedback.created_at, LeadFeedback.id)
+            )
+        ).all()
+    )
+    if existing:
+        feedback = existing[-1]
+        feedback.feedback = payload.feedback
+        for duplicate in existing[:-1]:
+            await db.delete(duplicate)
+    else:
+        feedback = LeadFeedback(lead_id=lead_id, feedback=payload.feedback)
+        db.add(feedback)
     lead.status = LeadStatus.REVIEWED
-    db.add(feedback)
     message = await db.get(Message, lead.message_id)
     if message:
         await db.flush()

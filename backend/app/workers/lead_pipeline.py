@@ -83,6 +83,10 @@ class LeadPipelineWorker:
                 else None
             )
             is_lead = result.is_lead
+            if profile and profile.positive_keywords:
+                # An explicit keyword profile is an intentional subscription. AI still enriches
+                # and scores the match, but must not silently discard what the user asked to see.
+                is_lead = True
             if profile and profile.categories and result.category.value not in profile.categories:
                 is_lead = False
             score = 0

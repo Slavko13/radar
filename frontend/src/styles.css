@@ -81,6 +81,9 @@ h3 { font-size: 14px; margin-bottom: 6px; }
 .lead-row a { color: #58d7aa; text-decoration: none; font-size: 12px; }
 .feedback { display: flex; gap: 5px; }
 .feedback button, .ghost { background: #14242b; color: #92a6af; border: 1px solid #29404a; border-radius: 7px; padding: 7px 10px; }
+.feedback button:disabled, .detail-actions button:disabled { cursor: wait; opacity: .55; }
+.feedback button.selected.positive, .detail-actions button.selected.positive { color: #58e4b1; border-color: #347a61; background: #14352a; box-shadow: 0 0 14px #36d69b1f; }
+.feedback button.selected.negative, .detail-actions button.selected.negative { color: #f0927f; border-color: #743e35; background: #38211e; box-shadow: 0 0 14px #e7654d18; }
 .detail-button { background: transparent; color: #93a8b1; border: 0; font-size: 11px; }
 .filters { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) 150px 100px; gap: 8px; margin-bottom: 18px; }
 .filters select, .filters input { width: 100%; color: #a8bac2; background: #08141a; border: 1px solid #263c45; border-radius: 7px; padding: 9px; }
@@ -122,6 +125,7 @@ input[type=range] { accent-color: #43dfa7; width: 100%; }
 .integration b.ok { color: #50dbac; }
 .notice { padding: 13px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 12px; }
 .notice.error { background: #351e1d; color: #f19a87; border: 1px solid #65302c; }
+.notice.success { background: #102b23; color: #67deb4; border: 1px solid #2a614d; }
 .notice.warning { margin-top: 24px; background: #302a18; color: #d9b665; border: 1px solid #574a27; }
 .auth-form { display: grid; gap: 12px; margin-top: 24px; }
 .auth-form p, .account p { color: #81959f; font-size: 12px; margin: 0; }

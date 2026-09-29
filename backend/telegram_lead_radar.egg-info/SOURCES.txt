@@ -25,6 +25,7 @@ app/lead_detection/schemas.py
 app/notifications/__init__.py
 app/notifications/bot.py
 app/services/__init__.py
+app/services/message_quality.py
 app/services/prefilter.py
 app/services/scoring.py
 app/services/source_score.py
@@ -45,6 +46,7 @@ telegram_lead_radar.egg-info/top_level.txt
 tests/test_auth.py
 tests/test_classifier.py
 tests/test_iteration_five_schemas.py
+tests/test_message_quality.py
 tests/test_notification_bot.py
 tests/test_prefilter.py
 tests/test_reply_generator.py

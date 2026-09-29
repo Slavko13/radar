@@ -37,6 +37,7 @@ from app.models import (
     TelegramAccount,
     TelegramAccountStatus,
 )
+from app.services.message_quality import find_similar_message, message_fingerprint
 from app.services.prefilter import DEFAULT_SUBJECT_KEYWORDS, PrefilterResult, evaluate_message
 from app.telegram.links import message_link, parse_telegram_target
 from app.telegram.session_store import EncryptedSessionStore, SessionStoreError
@@ -545,16 +546,25 @@ class TelegramManager:
                     return False, True
             return False, False
         text = (telegram_message.raw_text or "").strip()
-        prefilter, profile_id = await _evaluate_for_profiles(db, text)
+        sender_id = getattr(sender, "id", None)
+        duplicate = await find_similar_message(db, text, sender_id=sender_id)
+        if duplicate:
+            prefilter = PrefilterResult(False, (), (), ())
+            profile_id = None
+        else:
+            prefilter, profile_id = await _evaluate_for_profiles(db, text)
         reply = telegram_message.reply_to
         message = Message(
             source_id=source.id,
             matched_profile_id=profile_id,
             telegram_message_id=telegram_message.id,
-            sender_id=getattr(sender, "id", None),
+            sender_id=sender_id,
             sender_username=getattr(sender, "username", None),
             sender_name=_sender_name(sender),
             text=text,
+            content_fingerprint=message_fingerprint(text),
+            duplicate_of_message_id=duplicate.id if duplicate else None,
+            suppression_reason="SIMILAR_MESSAGE" if duplicate else None,
             message_date=telegram_message.date.astimezone(UTC),
             edit_date=telegram_message.edit_date,
             thread_id=getattr(reply, "reply_to_top_id", None),
