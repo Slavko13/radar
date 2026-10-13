@@ -31,3 +31,14 @@ def test_score_bands() -> None:
         "POSSIBLE",
         "IGNORE",
     ]
+
+
+def test_old_message_loses_actionability_points() -> None:
+    fresh = calculate_lead_score(
+        ScoreFactors(confidence=0.8, intent="LOOKING_FOR_CONTRACTOR", message_age_hours=2)
+    )
+    stale = calculate_lead_score(
+        ScoreFactors(confidence=0.8, intent="LOOKING_FOR_CONTRACTOR", message_age_hours=200)
+    )
+
+    assert fresh - stale == 15

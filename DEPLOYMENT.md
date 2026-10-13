@@ -45,6 +45,11 @@ sudo env PUBLIC_HOST=radar.example.com ADMIN_PASSWORD='надежный-паро
    созданному боту `/start`, найдите чат и сохраните подключение.
 5. Добавьте группы и каналы в «Источники».
 6. Создайте профили поиска и включите в них уведомления.
+7. В «Настройках» подключите настоящий AI-провайдер. Тестовый режим подходит
+   только для проверки интерфейса и не обеспечивает точной классификации.
+8. Заполните «Мой профиль» и добавьте реальные кейсы, чтобы радар мог формировать
+   блок «Что приложить» без выдуманных ссылок.
+9. Выберите мгновенные уведомления, дайджест или комбинированный режим.
 
 ## Обновление
 
@@ -80,6 +85,28 @@ docker compose -p lead-radar -f docker-compose.prod.yml down
 ```
 
 Не запускайте `down -v`, если хотите сохранить базу, Telegram-сессию и сертификаты.
+
+## Резервное копирование
+
+Создать SQL-копию базы в текущей папке:
+
+```bash
+docker compose -p lead-radar -f docker-compose.prod.yml exec -T postgres \
+  pg_dump -U lead_radar lead_radar > lead-radar-backup.sql
+```
+
+Зашифрованные Telegram, Bot API и AI credentials находятся в Docker volume
+`lead-radar_telegram_sessions`. Архивировать его можно так:
+
+```bash
+docker run --rm \
+  -v lead-radar_telegram_sessions:/data:ro \
+  -v "$PWD":/backup alpine \
+  tar czf /backup/lead-radar-credentials.tar.gz -C /data .
+```
+
+Храните SQL-файл и архив credentials вместе с `APP_SECRET_KEY` из `.env`. Без этого
+ключа зашифрованные данные восстановить невозможно. Не публикуйте резервные копии в Git.
 
 ## Повторная настройка адреса или пароля
 

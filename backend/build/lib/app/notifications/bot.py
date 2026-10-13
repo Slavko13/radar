@@ -125,6 +125,12 @@ class TelegramBotClient:
         message = lead.message
         source = message.source
         author = f"@{message.sender_username}" if message.sender_username else message.sender_name
+        contact_value = getattr(lead, "contact_value", None)
+        contact_url = getattr(lead, "contact_url", None)
+        contact_type = getattr(lead, "contact_type", None)
+        title = getattr(lead, "title", None)
+        offer_type = getattr(lead, "offer_type", "UNKNOWN")
+        contact = contact_value or author or "Не найден"
         budget = (
             f"{lead.budget} {lead.budget_currency or ''}".strip()
             if lead.budget is not None
@@ -133,21 +139,31 @@ class TelegramBotClient:
         deadline = lead.deadline.isoformat() if lead.deadline else "Не указан"
         text = (
             f"🔥 <b>НОВЫЙ ЛИД — {lead.lead_score}/100</b>\n\n"
+            f"<b>{html.escape(title or lead.summary)}</b>\n"
             f"{html.escape(lead.summary)}\n\n"
+            f"<b>Тип:</b> {html.escape(offer_type.replace('_', ' ').title())}\n"
             f"<b>Категория:</b> {html.escape(lead.category.replace('_', ' ').title())}\n"
             f"<b>Срочность:</b> {html.escape(lead.urgency or 'Не указана')}\n"
             f"<b>Бюджет:</b> {html.escape(budget)}\n"
             f"<b>Срок:</b> {html.escape(deadline)}\n\n"
             f"<b>Чат:</b> {html.escape(source.title)}\n"
-            f"<b>Автор:</b> {html.escape(author or 'Не указан')}"
+            f"<b>Контакт:</b> {html.escape(contact)}"
         )
         buttons: list[list[dict[str, str]]] = []
+        if contact_url and contact_type == "TELEGRAM_USERNAME":
+            buttons.append([{"text": "✉️ Написать", "url": contact_url}])
         if message.message_url:
             buttons.append([{"text": "🚀 Открыть сообщение", "url": message.message_url}])
         buttons.append(
             [
                 {"text": "✅ Хороший лид", "callback_data": f"lead:{lead.id}:positive"},
                 {"text": "❌ Не лид", "callback_data": f"lead:{lead.id}:negative"},
+            ]
+        )
+        buttons.append(
+            [
+                {"text": "⭐ Сохранить", "callback_data": f"lead:{lead.id}:save"},
+                {"text": "✉️ Уже написал", "callback_data": f"lead:{lead.id}:contacted"},
             ]
         )
         await self._request(
@@ -161,6 +177,37 @@ class TelegramBotClient:
             },
         )
 
+    async def send_digest(self, leads: list[Lead]) -> None:
+        if not self.configured:
+            raise BotApiError("Notification bot is not configured")
+        blocks = [f"📋 <b>ДАЙДЖЕСТ ЛИДОВ — {len(leads)}</b>"]
+        for index, lead in enumerate(leads, start=1):
+            contact = lead.contact_value or "Прямого контакта нет"
+            title = lead.title or lead.summary
+            links: list[str] = []
+            if lead.contact_url and lead.contact_type == "TELEGRAM_USERNAME":
+                links.append(
+                    f'<a href="{html.escape(lead.contact_url, quote=True)}">написать</a>'
+                )
+            if lead.message.message_url:
+                links.append(
+                    f'<a href="{html.escape(lead.message.message_url, quote=True)}">источник</a>'
+                )
+            link_line = f" · {' / '.join(links)}" if links else ""
+            blocks.append(
+                f"\n<b>{index}. {html.escape(title)}</b> — {lead.lead_score}/100\n"
+                f"Контакт: {html.escape(contact)}{link_line}\n"
+                f"{html.escape(lead.summary[:350])}"
+            )
+        await self._request(
+            "sendMessage",
+            {
+                "chat_id": self.chat_id,
+                "text": "\n".join(blocks),
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            },
+        )
     async def get_updates(self, offset: int | None) -> list[dict]:
         payload: dict[str, object] = {
             "timeout": 25,

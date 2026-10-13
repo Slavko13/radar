@@ -5,7 +5,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import auth, dashboard, discovery, leads, profiles, settings, sources, telegram
+from app.api import (
+    auth,
+    dashboard,
+    discovery,
+    leads,
+    portfolio,
+    profiles,
+    settings,
+    sources,
+    telegram,
+)
 from app.auth.middleware import AdminAuthMiddleware
 from app.auth.service import AuthService
 from app.config import get_settings
@@ -58,6 +68,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(discovery.router, prefix="/api")
 app.include_router(profiles.router, prefix="/api")
+app.include_router(portfolio.router, prefix="/api")
 app.include_router(sources.router, prefix="/api")
 app.include_router(leads.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")

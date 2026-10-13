@@ -48,6 +48,16 @@ class FeedbackValue(StrEnum):
     NEGATIVE = "NEGATIVE"
 
 
+class OpportunityStatus(StrEnum):
+    NEW = "NEW"
+    SAVED = "SAVED"
+    CONTACTED = "CONTACTED"
+    REPLIED = "REPLIED"
+    WON = "WON"
+    LOST = "LOST"
+    ARCHIVED = "ARCHIVED"
+
+
 class TelegramAccountStatus(StrEnum):
     CONNECTED = "CONNECTED"
     DISCONNECTED = "DISCONNECTED"
@@ -206,8 +216,12 @@ class Lead(Base):
     is_lead: Mapped[bool] = mapped_column(Boolean, default=True)
     confidence: Mapped[float] = mapped_column(Float)
     lead_score: Mapped[int] = mapped_column(Integer, index=True)
+    title: Mapped[str | None] = mapped_column(String(200))
+    offer_type: Mapped[str] = mapped_column(String(30), default="UNKNOWN", index=True)
     category: Mapped[str] = mapped_column(String(50), index=True)
     service: Mapped[str | None] = mapped_column(String(100))
+    requirements: Mapped[list[str]] = mapped_column(JSON, default=list)
+    work_format: Mapped[str | None] = mapped_column(String(100))
     intent: Mapped[str] = mapped_column(String(50))
     urgency: Mapped[str | None] = mapped_column(String(20))
     budget: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
@@ -215,6 +229,19 @@ class Lead(Base):
     deadline: Mapped[date | None] = mapped_column(Date)
     summary: Mapped[str] = mapped_column(String(500))
     reason: Mapped[str | None] = mapped_column(Text)
+    contact_type: Mapped[str | None] = mapped_column(String(30))
+    contact_value: Mapped[str | None] = mapped_column(String(255))
+    contact_url: Mapped[str | None] = mapped_column(String(500))
+    contact_source: Mapped[str | None] = mapped_column(String(30))
+    contact_confidence: Mapped[float | None] = mapped_column(Float)
+    evidence: Mapped[list[str]] = mapped_column(JSON, default=list)
+    suggested_materials: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    fit_score: Mapped[int | None] = mapped_column(Integer, index=True)
+    workflow_status: Mapped[OpportunityStatus] = mapped_column(
+        Enum(OpportunityStatus, native_enum=False), default=OpportunityStatus.NEW, index=True
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+    classification_version: Mapped[str | None] = mapped_column(String(50))
     status: Mapped[LeadStatus] = mapped_column(
         Enum(LeadStatus, native_enum=False), default=LeadStatus.NEW, index=True
     )
@@ -240,6 +267,7 @@ class LeadFeedback(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     bot_update_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     feedback: Mapped[FeedbackValue] = mapped_column(Enum(FeedbackValue, native_enum=False))
+    reason: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     lead: Mapped[Lead] = relationship(back_populates="feedback")
 
@@ -250,6 +278,50 @@ class AppSettings(Base):
     id: Mapped[int] = mapped_column(primary_key=True, default=1)
     minimum_notification_score: Mapped[int] = mapped_column(Integer, default=70)
     include_vacancies: Mapped[bool] = mapped_column(Boolean, default=False)
+    notification_mode: Mapped[str] = mapped_column(String(20), default="IMMEDIATE")
+    digest_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    last_digest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    max_lead_age_hours: Mapped[int] = mapped_column(Integer, default=168)
+    require_contact: Mapped[bool] = mapped_column(Boolean, default=False)
+    automatic_discovery: Mapped[bool] = mapped_column(Boolean, default=False)
+    discovery_interval_hours: Mapped[int] = mapped_column(Integer, default=24)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PortfolioProfile(Base):
+    __tablename__ = "portfolio_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    company_name: Mapped[str | None] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    services: Mapped[list[str]] = mapped_column(JSON, default=list)
+    skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    desired_offer_types: Mapped[list[str]] = mapped_column(JSON, default=list)
+    minimum_budget: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    budget_currency: Mapped[str | None] = mapped_column(String(3))
+    contact_signature: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PortfolioItem(Base):
+    __tablename__ = "portfolio_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(String(500))
+    services: Mapped[list[str]] = mapped_column(JSON, default=list)
+    skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    result: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

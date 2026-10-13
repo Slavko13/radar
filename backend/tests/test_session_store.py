@@ -40,3 +40,20 @@ def test_notification_bot_credentials_are_encrypted_and_removable(tmp_path) -> N
 
     store.delete_notification_bot()
     assert store.read_notification_bot() is None
+
+
+def test_ai_credentials_are_encrypted_and_removable(tmp_path) -> None:
+    store = EncryptedSessionStore(str(tmp_path), "a-test-secret-key")
+    store.write_ai_credentials("openai", "secret-api-key", "model-name", "https://api.test/v1")
+
+    encrypted = (tmp_path / "ai-credentials.enc").read_bytes()
+    assert b"secret-api-key" not in encrypted
+    assert store.read_ai_credentials() == {
+        "provider": "openai",
+        "api_key": "secret-api-key",
+        "model": "model-name",
+        "base_url": "https://api.test/v1",
+    }
+
+    store.delete_ai_credentials()
+    assert store.read_ai_credentials() is None

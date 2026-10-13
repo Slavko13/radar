@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
@@ -8,7 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
-from app.models import FeedbackValue, Lead, LeadFeedback, Message, MessageProcessingStatus
+from app.models import (
+    FeedbackValue,
+    Lead,
+    LeadFeedback,
+    Message,
+    MessageProcessingStatus,
+    OpportunityStatus,
+)
 from app.schemas import DashboardRead, PipelineStatusRead
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -63,6 +70,49 @@ async def dashboard(db: DbSession) -> DashboardRead:
             LeadFeedback.feedback == FeedbackValue.POSITIVE,
         ),
     )
+    cutoff_30d = datetime.now(UTC) - timedelta(days=30)
+    total_leads_30d = await _count(
+        db,
+        select(func.count(Lead.id)).where(
+            Lead.created_at >= cutoff_30d, Lead.is_lead.is_(True)
+        ),
+    )
+    contacts_30d = await _count(
+        db,
+        select(func.count(Lead.id)).where(
+            Lead.created_at >= cutoff_30d,
+            Lead.is_lead.is_(True),
+            Lead.contact_type == "TELEGRAM_USERNAME",
+        ),
+    )
+    positive_30d = await _count(
+        db,
+        select(func.count(func.distinct(LeadFeedback.lead_id))).where(
+            LeadFeedback.created_at >= cutoff_30d,
+            LeadFeedback.feedback == FeedbackValue.POSITIVE,
+        ),
+    )
+    reviewed_30d = await _count(
+        db,
+        select(func.count(func.distinct(LeadFeedback.lead_id))).where(
+            LeadFeedback.created_at >= cutoff_30d
+        ),
+    )
+    contacted_30d = await _count(
+        db,
+        select(func.count(Lead.id)).where(
+            Lead.updated_at >= cutoff_30d,
+            Lead.workflow_status.in_(
+                [OpportunityStatus.CONTACTED, OpportunityStatus.REPLIED, OpportunityStatus.WON]
+            ),
+        ),
+    )
+    won_30d = await _count(
+        db,
+        select(func.count(Lead.id)).where(
+            Lead.updated_at >= cutoff_30d, Lead.workflow_status == OpportunityStatus.WON
+        ),
+    )
     return DashboardRead(
         messages_today=messages_today,
         prefiltered_today=prefiltered_today,
@@ -72,6 +122,13 @@ async def dashboard(db: DbSession) -> DashboardRead:
         good_today=good_today,
         possible_today=possible_today,
         confirmed_today=confirmed_today,
+        total_leads_30d=total_leads_30d,
+        contact_coverage_30d=round(contacts_30d / total_leads_30d * 100, 1)
+        if total_leads_30d
+        else 0,
+        precision_30d=round(positive_30d / reviewed_30d * 100, 1) if reviewed_30d else 0,
+        contacted_30d=contacted_30d,
+        won_30d=won_30d,
     )
 
 

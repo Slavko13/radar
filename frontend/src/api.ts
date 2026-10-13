@@ -19,11 +19,17 @@ export type Lead = {
   message_text: string;
   message_url: string | null;
   sender_username: string | null;
+  sender_name: string | null;
   message_date: string;
   confidence: number;
   lead_score: number;
+  title: string | null;
+  offer_type: string;
   category: string;
   service: string | null;
+  requirements: string[];
+  work_format: string | null;
+  evidence: string[];
   intent: string;
   urgency: string | null;
   budget: string | null;
@@ -31,6 +37,17 @@ export type Lead = {
   deadline: string | null;
   summary: string;
   reason: string | null;
+  contact_type: string | null;
+  contact_value: string | null;
+  contact_url: string | null;
+  contact_source: string | null;
+  contact_confidence: number | null;
+  suggested_materials: { id: number; title: string; url: string | null; reason: string; score: number }[];
+  fit_score: number | null;
+  workflow_status: "NEW" | "SAVED" | "CONTACTED" | "REPLIED" | "WON" | "LOST" | "ARCHIVED";
+  notes: string | null;
+  feedback_reason: string | null;
+  classification_version: string | null;
   status: string;
   feedback: "POSITIVE" | "NEGATIVE" | null;
   created_at: string;
@@ -45,6 +62,11 @@ export type DashboardStats = {
   good_today: number;
   possible_today: number;
   confirmed_today: number;
+  total_leads_30d: number;
+  contact_coverage_30d: number;
+  precision_30d: number;
+  contacted_30d: number;
+  won_30d: number;
 };
 
 export type PipelineStatus = {
@@ -59,7 +81,49 @@ export type PipelineStatus = {
 export type Settings = {
   minimum_notification_score: number;
   include_vacancies: boolean;
+  notification_mode: "IMMEDIATE" | "DIGEST" | "BOTH";
+  digest_interval_minutes: number;
+  max_lead_age_hours: number;
+  require_contact: boolean;
+  automatic_discovery: boolean;
+  discovery_interval_hours: number;
 };
+
+export type AiStatus = {
+  configured: boolean;
+  provider: string;
+  model: string | null;
+  base_url: string | null;
+};
+
+export type PortfolioProfile = {
+  id: number;
+  company_name: string | null;
+  description: string | null;
+  services: string[];
+  skills: string[];
+  desired_offer_types: string[];
+  minimum_budget: string | null;
+  budget_currency: string | null;
+  contact_signature: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PortfolioItem = {
+  id: number;
+  title: string;
+  description: string;
+  url: string | null;
+  services: string[];
+  skills: string[];
+  result: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PortfolioItemInput = Omit<PortfolioItem, "id" | "created_at" | "updated_at">;
 
 export type TelegramStatus = {
   configured: boolean;
@@ -187,11 +251,15 @@ export const api = {
     request<Lead[]>(`/api/leads${params?.size ? `?${params}` : ""}`),
   dashboard: () => request<DashboardStats>("/api/dashboard"),
   pipelineStatus: () => request<PipelineStatus>("/api/dashboard/pipeline"),
-  feedback: (id: number, feedback: "POSITIVE" | "NEGATIVE") =>
+  feedback: (id: number, feedback: "POSITIVE" | "NEGATIVE", reason?: string | null) =>
     request(`/api/leads/${id}/feedback`, {
       method: "POST",
-      body: JSON.stringify({ feedback }),
+      body: JSON.stringify({ feedback, reason: reason || null }),
     }),
+  updateLead: (id: number, payload: Partial<Pick<Lead, "workflow_status" | "notes">>) =>
+    request<Lead>(`/api/leads/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  reprocessLeads: (limit = 100, only_incomplete = true) =>
+    request<{ queued: number }>("/api/leads/reprocess", { method: "POST", body: JSON.stringify({ limit, only_incomplete }) }),
   draftResponse: (id: number) =>
     request<{ draft: string; generated_at: string; auto_sent: false }>(`/api/leads/${id}/draft-response`, { method: "POST" }),
   analyzeSource: (id: number, limit: 100 | 500 | 1000) =>
@@ -237,6 +305,17 @@ export const api = {
   telegramDisconnect: () =>
     request<void>("/api/telegram/disconnect", { method: "POST" }),
   integrationStatus: () => request<IntegrationStatus>("/api/settings/integrations"),
+  aiStatus: () => request<AiStatus>("/api/settings/ai"),
+  configureAi: (payload: { provider: "openai" | "openai_compatible"; api_key: string; model: string; base_url: string }) =>
+    request<AiStatus>("/api/settings/ai", { method: "POST", body: JSON.stringify(payload) }),
+  disconnectAi: () => request<AiStatus>("/api/settings/ai", { method: "DELETE" }),
+  portfolioProfile: () => request<PortfolioProfile>("/api/portfolio/profile"),
+  updatePortfolioProfile: (payload: Omit<PortfolioProfile, "id" | "created_at" | "updated_at">) =>
+    request<PortfolioProfile>("/api/portfolio/profile", { method: "PUT", body: JSON.stringify(payload) }),
+  portfolioItems: () => request<PortfolioItem[]>("/api/portfolio/items"),
+  addPortfolioItem: (payload: PortfolioItemInput) => request<PortfolioItem>("/api/portfolio/items", { method: "POST", body: JSON.stringify(payload) }),
+  updatePortfolioItem: (id: number, payload: Partial<PortfolioItemInput>) => request<PortfolioItem>(`/api/portfolio/items/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deletePortfolioItem: (id: number) => request<void>(`/api/portfolio/items/${id}`, { method: "DELETE" }),
   notificationBotStatus: () => request<NotificationBotStatus>("/api/settings/notification-bot"),
   probeNotificationBot: (token: string) => request<NotificationBotProbe>("/api/settings/notification-bot/probe", {
     method: "POST",

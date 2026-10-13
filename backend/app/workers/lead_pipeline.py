@@ -8,8 +8,23 @@ from sqlalchemy.orm import selectinload
 
 from app.config import Settings
 from app.database import SessionLocal
-from app.lead_detection.classifier import ClassificationError, LeadClassifier, build_classifier
-from app.models import Lead, LeadStatus, Message, MessageProcessingStatus, SearchProfile
+from app.lead_detection.classifier import (
+    PROMPT_VERSION,
+    ClassificationError,
+    LeadClassifier,
+    build_classifier,
+)
+from app.models import (
+    Lead,
+    LeadStatus,
+    Message,
+    MessageProcessingStatus,
+    PortfolioItem,
+    PortfolioProfile,
+    SearchProfile,
+)
+from app.services.contact_extraction import extract_lead_contact
+from app.services.portfolio_matching import match_portfolio
 from app.services.scoring import ScoreFactors, calculate_lead_score
 from app.services.source_score import refresh_source_score
 
@@ -27,6 +42,14 @@ class LeadPipelineWorker:
         except ClassificationError:
             self.configuration_error = "AI provider is not configured correctly"
         self._stop = asyncio.Event()
+        self._classifier_lock = asyncio.Lock()
+
+    async def reconfigure(self) -> None:
+        async with self._classifier_lock:
+            if self.classifier:
+                await self.classifier.close()
+            self.classifier = build_classifier(self.settings)
+            self.configuration_error = None
 
     async def run(self) -> None:
         await self._recover_abandoned_jobs()
@@ -58,9 +81,12 @@ class LeadPipelineWorker:
             attempts = message.processing_attempts
 
         try:
-            if not self.classifier:
-                raise ClassificationError(self.configuration_error or "AI provider unavailable")
-            result = await self.classifier.classify(text)
+            async with self._classifier_lock:
+                if not self.classifier:
+                    raise ClassificationError(
+                        self.configuration_error or "AI provider unavailable"
+                    )
+                result = await self.classifier.classify(text)
         except Exception:
             await self._record_failure(message_id, attempts)
             return True
@@ -89,6 +115,29 @@ class LeadPipelineWorker:
                 is_lead = True
             if profile and profile.categories and result.category.value not in profile.categories:
                 is_lead = False
+            contact = extract_lead_contact(
+                message.text,
+                sender_username=message.sender_username,
+                message_url=message.message_url,
+            )
+            portfolio_profile = await db.get(PortfolioProfile, 1)
+            portfolio_items = list(
+                (
+                    await db.scalars(
+                        select(PortfolioItem).where(PortfolioItem.active.is_(True))
+                    )
+                ).all()
+            )
+            portfolio_match = match_portfolio(
+                title=result.title,
+                summary=result.summary,
+                category=result.category.value,
+                service=result.service,
+                requirements=result.requirements,
+                offer_type=result.offer_type.value,
+                profile=portfolio_profile,
+                items=portfolio_items,
+            )
             score = 0
             if is_lead:
                 score = calculate_lead_score(
@@ -98,6 +147,12 @@ class LeadPipelineWorker:
                         has_specific_task=bool(result.service and result.service != "OTHER"),
                         has_budget=result.budget is not None,
                         has_deadline=result.deadline is not None,
+                        has_contact=bool(contact and contact.type == "TELEGRAM_USERNAME"),
+                        portfolio_fit=portfolio_match.fit_score,
+                        message_age_hours=max(
+                            0,
+                            (datetime.now(UTC) - message.message_date).total_seconds() / 3600,
+                        ),
                         urgency=result.urgency.value,
                         source_score=message.source.source_score,
                     )
@@ -108,8 +163,13 @@ class LeadPipelineWorker:
                 is_lead=is_lead,
                 confidence=result.confidence,
                 lead_score=score,
+                title=result.title,
+                offer_type=result.offer_type.value,
                 category=result.category.value,
                 service=result.service,
+                requirements=result.requirements,
+                work_format=result.work_format,
+                evidence=result.evidence,
                 intent=result.intent.value,
                 urgency=result.urgency.value,
                 budget=result.budget,
@@ -117,6 +177,14 @@ class LeadPipelineWorker:
                 deadline=result.deadline,
                 summary=result.summary,
                 reason=result.reason,
+                contact_type=contact.type if contact else None,
+                contact_value=contact.value if contact else None,
+                contact_url=contact.url if contact else None,
+                contact_source=contact.source if contact else None,
+                contact_confidence=contact.confidence if contact else None,
+                suggested_materials=portfolio_match.materials,
+                fit_score=portfolio_match.fit_score,
+                classification_version=PROMPT_VERSION,
                 status=LeadStatus.NEW,
             )
             db.add(lead)

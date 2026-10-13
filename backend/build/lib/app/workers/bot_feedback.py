@@ -5,7 +5,14 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import Settings
 from app.database import SessionLocal
-from app.models import FeedbackValue, Lead, LeadFeedback, LeadStatus, Message
+from app.models import (
+    FeedbackValue,
+    Lead,
+    LeadFeedback,
+    LeadStatus,
+    Message,
+    OpportunityStatus,
+)
 from app.notifications.bot import BotApiError, TelegramBotClient
 from app.services.source_score import refresh_source_score
 
@@ -62,16 +69,30 @@ class BotFeedbackWorker:
                 await self.bot.answer_callback(callback_id, "Недоступно")
             return
         parts = data.split(":")
-        if len(parts) != 3 or parts[0] != "lead" or parts[2] not in {"positive", "negative"}:
+        if len(parts) != 3 or parts[0] != "lead" or parts[2] not in {
+            "positive",
+            "negative",
+            "save",
+            "contacted",
+        }:
             return
         lead_id = int(parts[1])
+        action = parts[2]
         feedback_value = (
-            FeedbackValue.POSITIVE if parts[2] == "positive" else FeedbackValue.NEGATIVE
+            FeedbackValue.POSITIVE if action == "positive" else FeedbackValue.NEGATIVE
         )
         async with SessionLocal() as db:
             lead = await db.get(Lead, lead_id)
             if lead is None:
                 answer = "Лид не найден"
+            elif action in {"save", "contacted"}:
+                lead.workflow_status = (
+                    OpportunityStatus.SAVED
+                    if action == "save"
+                    else OpportunityStatus.CONTACTED
+                )
+                await db.commit()
+                answer = "Лид сохранён" if action == "save" else "Статус обновлён"
             else:
                 feedback = LeadFeedback(
                     lead_id=lead_id,

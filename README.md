@@ -114,6 +114,18 @@ Telegram MTProto. Найденные чаты получают статус `DIS
 одинаковые и очень похожие рассылки за последние 30 дней, а также типовая самореклама
 разработчиков подавляются и повторно в уведомления не попадают.
 
+## Точные предложения, портфолио и AI
+
+Каждый новый лид хранит тип предложения, задачу, требования, доступный контакт,
+подтверждающие фрагменты сообщения, соответствие профилю и подходящие кейсы. Раздел
+«Мой профиль» содержит услуги, навыки и реальные работы; рекомендации «Что приложить»
+никогда не создают несуществующие ссылки. В «Лидах» доступны статусы воронки, заметки,
+причины отклонения, повторная обработка и CSV-экспорт.
+
+Основной способ настройки AI — мастер в разделе «Настройки». Он проверяет ключ и модель
+одним structured-output запросом, после чего сохраняет credentials зашифрованно. Новая
+конфигурация применяется без перезапуска backend.
+
 ## AI provider
 
 Классификатор настраивается через следующие переменные:
@@ -126,7 +138,9 @@ AI_BASE_URL=https://api.openai.com/v1
 AI_TIMEOUT_SECONDS=30
 ```
 
-`AI_PROVIDER=mock` включает детерминированный локальный классификатор для проверки всего pipeline без платных запросов. Для реальной модели используйте `openai` или `openai_compatible`, укажите API key, model и совместимый `/chat/completions` base URL. Backend обращается к моделям только через абстракцию `LeadClassifier`; timeout, rate limit и некорректный JSON приводят к retry через 5, 30 и 120 секунд, не останавливая Telegram listener.
+`AI_PROVIDER=mock` включает детерминированный локальный классификатор только для проверки
+pipeline. Он не обеспечивает точность production-поиска. Переменные окружения являются
+запасным способом настройки; для реальной модели удобнее мастер во frontend.
 
 Основной способ подключения Notification Bot — мастер в разделе «Настройки»: создайте
 бота через `@BotFather`, вставьте токен, отправьте боту `/start`, выберите найденный
@@ -173,15 +187,22 @@ alembic upgrade head
 - `POST /api/sources/import-dialog`
 - `GET /api/leads`
 - `GET /api/leads/{id}`
+- `PATCH /api/leads/{id}`
 - `POST /api/leads/{id}/feedback`
 - `POST /api/leads/{id}/draft-response`
+- `POST /api/leads/reprocess`
 - `GET/POST /api/discovery/queries`
 - `PATCH/DELETE /api/discovery/queries/{id}`
 - `GET /api/discovery/results`
 - `POST /api/discovery/run`
 - `GET/POST /api/search-profiles`
 - `PATCH/DELETE /api/search-profiles/{id}`
+- `GET/PUT /api/portfolio/profile`
+- `GET/POST /api/portfolio/items`
+- `PATCH/DELETE /api/portfolio/items/{id}`
 - `GET/PATCH /api/settings`
+- `GET/POST/DELETE /api/settings/ai`
+- `GET/POST/DELETE /api/settings/notification-bot`
 - `GET /api/telegram/status`
 - `POST /api/telegram/configure`
 - `POST /api/telegram/auth/start`

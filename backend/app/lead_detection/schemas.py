@@ -42,13 +42,28 @@ class Urgency(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class OfferType(StrEnum):
+    PROJECT_ORDER = "PROJECT_ORDER"
+    VACANCY = "VACANCY"
+    PART_TIME = "PART_TIME"
+    RETAINER = "RETAINER"
+    TENDER = "TENDER"
+    PARTNERSHIP = "PARTNERSHIP"
+    UNKNOWN = "UNKNOWN"
+
+
 class LeadClassification(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     is_lead: bool
     confidence: float = Field(ge=0, le=1)
+    title: str = Field(min_length=1, max_length=200)
+    offer_type: OfferType
     category: LeadCategory
     service: str | None = Field(max_length=100)
+    requirements: list[str] = Field(max_length=12)
+    work_format: str | None = Field(max_length=100)
+    evidence: list[str] = Field(max_length=8)
     intent: LeadIntent
     urgency: Urgency
     budget: Decimal | None = Field(ge=0)

@@ -8,6 +8,9 @@ class ScoreFactors:
     has_specific_task: bool = False
     has_budget: bool = False
     has_deadline: bool = False
+    has_contact: bool = False
+    portfolio_fit: int | None = None
+    message_age_hours: float | None = None
     urgency: str | None = None
     source_score: float | None = None
     negative_signals: int = 0
@@ -31,6 +34,16 @@ def calculate_lead_score(factors: ScoreFactors) -> int:
     score += 12 if factors.has_specific_task else 0
     score += 8 if factors.has_budget else 0
     score += 6 if factors.has_deadline else 0
+    score += 7 if factors.has_contact else 0
+    if factors.portfolio_fit is not None:
+        score += round(max(0, min(100, factors.portfolio_fit)) / 20)
+    if factors.message_age_hours is not None:
+        if factors.message_age_hours > 168:
+            score -= 15
+        elif factors.message_age_hours > 72:
+            score -= 8
+        elif factors.message_age_hours > 24:
+            score -= 3
     score += {"HIGH": 5, "MEDIUM": 3, "LOW": 1}.get(factors.urgency or "", 0)
     if factors.source_score is not None:
         score += round(max(0.0, min(10.0, factors.source_score)) / 2)

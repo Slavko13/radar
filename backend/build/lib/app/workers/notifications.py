@@ -28,7 +28,9 @@ class NotificationWorker:
             processed = False
             if self.bot.configured:
                 try:
-                    processed = await self.process_one()
+                    processed = await self.process_digest_if_due()
+                    if not processed:
+                        processed = await self.process_one()
                 except Exception:
                     logger.exception("notification_worker_error")
             if not processed:
@@ -44,6 +46,8 @@ class NotificationWorker:
         now = datetime.now(UTC)
         async with SessionLocal() as db:
             app_settings = await db.get(AppSettings, 1)
+            if app_settings and app_settings.notification_mode == "DIGEST":
+                return False
             threshold = (
                 app_settings.minimum_notification_score
                 if app_settings
@@ -72,11 +76,21 @@ class NotificationWorker:
                         Lead.notification_next_attempt_at <= now,
                     ),
                 )
+                .join(Message, Lead.message_id == Message.id)
                 .options(selectinload(Lead.message).selectinload(Message.source))
                 .order_by(Lead.created_at)
                 .limit(1)
                 .with_for_update(skip_locked=True)
             )
+            if app_settings:
+                query = query.where(
+                    Message.message_date
+                    >= now - timedelta(hours=app_settings.max_lead_age_hours)
+                )
+                if app_settings.require_contact:
+                    query = query.where(Lead.contact_type == "TELEGRAM_USERNAME")
+                if app_settings.notification_mode == "BOTH":
+                    query = query.where(Lead.lead_score >= 90)
             lead = (await db.scalars(query)).one_or_none()
             if lead is None:
                 return False
@@ -111,6 +125,70 @@ class NotificationWorker:
                 lead.notification_error = None
                 await db.commit()
         logger.info("lead_notification_sent", extra={"lead_id": lead_id})
+        return True
+
+    async def process_digest_if_due(self) -> bool:
+        now = datetime.now(UTC)
+        async with SessionLocal() as db:
+            app_settings = await db.get(AppSettings, 1)
+            if not app_settings or app_settings.notification_mode == "IMMEDIATE":
+                return False
+            due_at = now - timedelta(minutes=app_settings.digest_interval_minutes)
+            if app_settings.last_digest_at and app_settings.last_digest_at > due_at:
+                return False
+            query = (
+                select(Lead)
+                .join(Message, Lead.message_id == Message.id)
+                .outerjoin(SearchProfile, Lead.search_profile_id == SearchProfile.id)
+                .where(
+                    Lead.is_lead.is_(True),
+                    Lead.notified_at.is_(None),
+                    Message.message_date
+                    >= now - timedelta(hours=app_settings.max_lead_age_hours),
+                    or_(
+                        and_(
+                            Lead.search_profile_id.is_(None),
+                            Lead.lead_score >= app_settings.minimum_notification_score,
+                        ),
+                        and_(
+                            Lead.search_profile_id.is_not(None),
+                            SearchProfile.enabled.is_(True),
+                            SearchProfile.notification_enabled.is_(True),
+                            Lead.lead_score >= SearchProfile.min_score,
+                        ),
+                    ),
+                )
+                .options(selectinload(Lead.message).selectinload(Message.source))
+                .order_by(Lead.lead_score.desc(), Lead.created_at)
+                .limit(8)
+            )
+            if app_settings.require_contact:
+                query = query.where(Lead.contact_type == "TELEGRAM_USERNAME")
+            if app_settings.notification_mode == "BOTH":
+                query = query.where(Lead.lead_score < 90)
+            leads = list((await db.scalars(query)).all())
+            app_settings.last_digest_at = now
+            await db.commit()
+            if not leads:
+                return False
+
+        try:
+            await self.bot.send_digest(leads)
+        except BotApiError:
+            for lead in leads:
+                await self._record_failure(lead.id)
+            return True
+
+        async with SessionLocal() as db:
+            sent_at = datetime.now(UTC)
+            for lead in leads:
+                stored = await db.get(Lead, lead.id)
+                if stored:
+                    stored.notified_at = sent_at
+                    stored.notification_next_attempt_at = None
+                    stored.notification_error = None
+            await db.commit()
+        logger.info("lead_digest_sent", extra={"count": len(leads)})
         return True
 
     async def _suppression_reason(

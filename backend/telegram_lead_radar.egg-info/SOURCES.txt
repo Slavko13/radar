@@ -11,6 +11,7 @@ app/api/auth.py
 app/api/dashboard.py
 app/api/discovery.py
 app/api/leads.py
+app/api/portfolio.py
 app/api/profiles.py
 app/api/settings.py
 app/api/sources.py
@@ -25,7 +26,9 @@ app/lead_detection/schemas.py
 app/notifications/__init__.py
 app/notifications/bot.py
 app/services/__init__.py
+app/services/contact_extraction.py
 app/services/message_quality.py
+app/services/portfolio_matching.py
 app/services/prefilter.py
 app/services/scoring.py
 app/services/source_score.py
@@ -36,6 +39,7 @@ app/telegram/session_store.py
 app/workers/__init__.py
 app/workers/bot_feedback.py
 app/workers/coordinator.py
+app/workers/discovery.py
 app/workers/lead_pipeline.py
 app/workers/notifications.py
 telegram_lead_radar.egg-info/PKG-INFO
@@ -45,9 +49,11 @@ telegram_lead_radar.egg-info/requires.txt
 telegram_lead_radar.egg-info/top_level.txt
 tests/test_auth.py
 tests/test_classifier.py
+tests/test_contact_extraction.py
 tests/test_iteration_five_schemas.py
 tests/test_message_quality.py
 tests/test_notification_bot.py
+tests/test_portfolio_matching.py
 tests/test_prefilter.py
 tests/test_reply_generator.py
 tests/test_scoring.py

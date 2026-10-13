@@ -5,9 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
+from app.lead_detection.classifier import ClassificationError
 from app.models import AppSettings
 from app.notifications.bot import BotApiError, TelegramBotClient
 from app.schemas import (
+    AiConfigureRequest,
+    AiStatusRead,
     IntegrationStatusRead,
     NotificationBotChatRead,
     NotificationBotConfigureRequest,
@@ -24,7 +27,7 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 @router.get("/integrations", response_model=IntegrationStatusRead)
 async def integration_status(request: Request) -> IntegrationStatusRead:
-    config = get_settings()
+    config = request.app.state.workers.settings
     bot = _bot(request)
     return IntegrationStatusRead(
         ai_configured=config.ai_configured,
@@ -32,6 +35,40 @@ async def integration_status(request: Request) -> IntegrationStatusRead:
         ai_model=config.ai_model,
         notification_bot_configured=bot.configured,
     )
+
+
+@router.get("/ai", response_model=AiStatusRead)
+async def ai_status(request: Request) -> AiStatusRead:
+    config = request.app.state.workers.settings
+    return AiStatusRead(
+        configured=config.ai_configured,
+        provider=config.ai_provider,
+        model=config.ai_model,
+        base_url=config.ai_base_url if config.ai_provider != "mock" else None,
+    )
+
+
+@router.post("/ai", response_model=AiStatusRead)
+async def configure_ai(payload: AiConfigureRequest, request: Request) -> AiStatusRead:
+    try:
+        await request.app.state.workers.configure_ai(
+            payload.provider,
+            payload.api_key.strip(),
+            payload.model.strip(),
+            payload.base_url.strip().rstrip("/"),
+        )
+    except ClassificationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="AI-провайдер не принял ключ, модель или формат structured output",
+        ) from exc
+    return await ai_status(request)
+
+
+@router.delete("/ai", response_model=AiStatusRead)
+async def disconnect_ai(request: Request) -> AiStatusRead:
+    await request.app.state.workers.use_mock_ai()
+    return await ai_status(request)
 
 
 def _bot(request: Request) -> TelegramBotClient:
