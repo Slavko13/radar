@@ -8,6 +8,7 @@ __pycache__/
 *.session-journal
 node_modules/
 dist/
+backups/
 .idea/
 .vscode/
 
