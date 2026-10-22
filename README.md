@@ -168,6 +168,27 @@ alembic revision --autogenerate -m "description"
 alembic upgrade head
 ```
 
+## Полный бэкап и перенос
+
+Полный архив включает PostgreSQL, `.env` с ключом шифрования и persistent volume с
+Telegram-сессией, Bot API и AI credentials. Создание архива на установленном сервере:
+
+```bash
+cd ~/radar && sudo bash backup.sh
+```
+
+Скрипт печатает путь к архиву и создаёт стабильную ссылку
+`backups/lead-radar-latest.tar.gz`. Для восстановления сначала установите Lead Radar на новом
+сервере, передайте туда архив и выполните:
+
+```bash
+cd ~/radar && sudo bash restore.sh /root/lead-radar-latest.tar.gz
+```
+
+Восстановление полностью заменяет базу и Telegram-сессию целевого сервера, поэтому скрипт
+требует явного подтверждения. Адрес и HTTPS-настройки сохраняются от нового сервера. Архив
+содержит секреты и не должен публиковаться или добавляться в Git.
+
 ## Текущий API
 
 - `GET /health`

@@ -181,4 +181,5 @@ printf '\nПолезные команды:\n'
 printf '  Статус:  docker compose -p %s -f docker-compose.prod.yml ps\n' "$PROJECT_NAME"
 printf '  Логи:    docker compose -p %s -f docker-compose.prod.yml logs -f backend\n' "$PROJECT_NAME"
 printf '  Обновить: sudo bash update.sh\n'
+printf '  Бэкап:   sudo bash backup.sh\n'
 printf '\nДля HTTPS откройте входящие TCP 80/443 и UDP 443.\n'
