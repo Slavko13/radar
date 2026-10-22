@@ -238,6 +238,7 @@ class SettingsRead(BaseModel):
     require_contact: bool
     automatic_discovery: bool
     discovery_interval_hours: int
+    message_retention_days: int
 
 
 class SettingsUpdate(BaseModel):
@@ -249,6 +250,14 @@ class SettingsUpdate(BaseModel):
     require_contact: bool | None = None
     automatic_discovery: bool | None = None
     discovery_interval_hours: int | None = Field(default=None, ge=1, le=168)
+    message_retention_days: int | None = Field(default=None, ge=1, le=365)
+
+
+class MessageCleanupRead(BaseModel):
+    deleted_messages: int
+    deleted_rejected_leads: int
+    retention_days: int
+    cutoff: datetime
 
 
 class LeadWorkflowUpdate(BaseModel):

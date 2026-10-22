@@ -39,3 +39,9 @@ def test_portfolio_profile_normalizes_lists_and_currency() -> None:
 def test_notification_settings_reject_too_frequent_digest() -> None:
     with pytest.raises(ValidationError):
         SettingsUpdate(digest_interval_minutes=5)
+
+
+def test_message_retention_rejects_unsafe_values() -> None:
+    assert SettingsUpdate(message_retention_days=14).message_retention_days == 14
+    with pytest.raises(ValidationError):
+        SettingsUpdate(message_retention_days=0)

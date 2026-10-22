@@ -12,6 +12,7 @@ from app.schemas import (
     AiConfigureRequest,
     AiStatusRead,
     IntegrationStatusRead,
+    MessageCleanupRead,
     NotificationBotChatRead,
     NotificationBotConfigureRequest,
     NotificationBotProbeRead,
@@ -163,3 +164,14 @@ async def update_settings(
     await db.commit()
     await db.refresh(settings)
     return settings
+
+
+@router.post("/cleanup-messages", response_model=MessageCleanupRead)
+async def cleanup_messages(request: Request) -> MessageCleanupRead:
+    result = await request.app.state.workers.cleanup.cleanup_now()
+    return MessageCleanupRead(
+        deleted_messages=result.deleted_messages,
+        deleted_rejected_leads=result.deleted_rejected_leads,
+        retention_days=result.retention_days,
+        cutoff=result.cutoff,
+    )

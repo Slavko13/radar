@@ -118,6 +118,7 @@ class TelegramManager:
         self.auth_attempts: dict[str, AuthAttempt] = {}
         self._account_id: int | None = None
         self._client_lock = asyncio.Lock()
+        self._backfill_lock = asyncio.Lock()
 
     @property
     def configured(self) -> bool:
@@ -393,7 +394,7 @@ class TelegramManager:
             )
         return chats
 
-    async def list_joined_chats(self, *, limit: int = 500) -> list[JoinedChatResult]:
+    async def list_joined_chats(self, *, limit: int | None = None) -> list[JoinedChatResult]:
         client = self._authorized_client()
         chats: list[JoinedChatResult] = []
         try:
@@ -433,6 +434,15 @@ class TelegramManager:
         )
 
     async def backfill_source(self, source: Source, *, limit: int) -> BackfillResult:
+        if self._backfill_lock.locked():
+            raise TelegramServiceError(
+                "Анализ другого источника уже выполняется. Дождитесь его завершения.",
+                code="ANALYSIS_IN_PROGRESS",
+            )
+        async with self._backfill_lock:
+            return await self._backfill_source_unlocked(source, limit=limit)
+
+    async def _backfill_source_unlocked(self, source: Source, *, limit: int) -> BackfillResult:
         client = self._authorized_client()
         target = source.username or source.telegram_chat_id
         if target is None:

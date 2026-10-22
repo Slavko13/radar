@@ -87,6 +87,14 @@ export type Settings = {
   require_contact: boolean;
   automatic_discovery: boolean;
   discovery_interval_hours: number;
+  message_retention_days: number;
+};
+
+export type MessageCleanupResult = {
+  deleted_messages: number;
+  deleted_rejected_leads: number;
+  retention_days: number;
+  cutoff: string;
 };
 
 export type AiStatus = {
@@ -281,6 +289,7 @@ export const api = {
   settings: () => request<Settings>("/api/settings"),
   updateSettings: (payload: Partial<Settings>) =>
     request<Settings>("/api/settings", { method: "PATCH", body: JSON.stringify(payload) }),
+  cleanupMessages: () => request<MessageCleanupResult>("/api/settings/cleanup-messages", { method: "POST" }),
   telegramStatus: () => request<TelegramStatus>("/api/telegram/status"),
   telegramConfigure: (api_id: number, api_hash: string) =>
     request<TelegramStatus>("/api/telegram/configure", {

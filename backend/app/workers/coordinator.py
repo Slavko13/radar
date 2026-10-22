@@ -6,6 +6,7 @@ from app.lead_detection.classifier import OpenAICompatibleClassifier
 from app.notifications.bot import TelegramBotClient
 from app.telegram.session_store import EncryptedSessionStore, SessionStoreError
 from app.workers.bot_feedback import BotFeedbackWorker
+from app.workers.cleanup import MessageCleanupWorker
 from app.workers.discovery import DiscoveryWorker
 from app.workers.lead_pipeline import LeadPipelineWorker
 from app.workers.notifications import NotificationWorker
@@ -34,6 +35,7 @@ class WorkerCoordinator:
         self.notifications = NotificationWorker(settings, self.bot)
         self.feedback = BotFeedbackWorker(settings, self.bot)
         self.discovery = DiscoveryWorker()
+        self.cleanup = MessageCleanupWorker()
         self.tasks: list[asyncio.Task] = []
 
     async def configure_ai(
@@ -72,6 +74,7 @@ class WorkerCoordinator:
             asyncio.create_task(self.notifications.run(), name="lead-notifications"),
             asyncio.create_task(self.feedback.run(), name="bot-feedback"),
             asyncio.create_task(self.discovery.run(), name="source-discovery"),
+            asyncio.create_task(self.cleanup.run(), name="message-cleanup"),
         ]
         logger.info("background_workers_started")
 
@@ -80,6 +83,7 @@ class WorkerCoordinator:
         await self.notifications.stop()
         await self.feedback.stop()
         await self.discovery.stop()
+        await self.cleanup.stop()
         for task in self.tasks:
             task.cancel()
         if self.tasks:

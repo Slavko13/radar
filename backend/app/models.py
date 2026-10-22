@@ -285,6 +285,7 @@ class AppSettings(Base):
     require_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     automatic_discovery: Mapped[bool] = mapped_column(Boolean, default=False)
     discovery_interval_hours: Mapped[int] = mapped_column(Integer, default=24)
+    message_retention_days: Mapped[int] = mapped_column(Integer, default=14)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
